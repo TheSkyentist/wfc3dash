@@ -28,8 +28,8 @@ def add_ytrace_offset(self, yoffset):
     from grizli.utils_c import interp
     
     self.ytrace_beam, self.lam_beam = self.conf.get_beam_trace(
-                        x=(self.xc+self.xcenter-self.pad)/self.grow,
-                        y=(self.yc+self.ycenter-self.pad)/self.grow,
+                        x=(self.xc+self.xcenter-self.pad[0])/self.grow,
+                        y=(self.yc+self.ycenter-self.pad[1])/self.grow,
                         dx=(self.dx+self.xcenter*0+self.xoffset)/self.grow,
                         beam=self.beam, fwcpos=self.fwcpos)
 
@@ -53,8 +53,8 @@ def add_ytrace_offset(self, yoffset):
 
     # Trace, wavelength, sensitivity across entire 2D array
     self.ytrace, self.lam = self.conf.get_beam_trace(
-                        x=(self.xc+self.xcenter-self.pad)/self.grow,
-                        y=(self.yc+self.ycenter-self.pad)/self.grow,
+                        x=(self.xc+self.xcenter-self.pad[0])/self.grow,
+                        y=(self.yc+self.ycenter-self.pad[1])/self.grow,
                         dx=(self.dxfull+self.xcenter+self.xoffset)/self.grow,
                         beam=self.beam, fwcpos=self.fwcpos)
 
