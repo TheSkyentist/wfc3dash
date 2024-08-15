@@ -8,7 +8,7 @@ To use, download *just* the RAW files for a given visit/program.
 
 """
 
-def run_all(skip_first_read=True):
+def run_all(skip_first_read=True, ncpu=1):
     """
     Run splitting script on all RAW files in the working directory.  
     
@@ -16,36 +16,46 @@ def run_all(skip_first_read=True):
     
     """
     
-    import os
     import glob
-    import astropy.io.fits as pyfits
-    
-    import wfc3tools
+    from multiprocessing import Pool
+
     
     files = glob.glob("*raw.fits")
     files.sort()
     
-    for file in files:
-        if os.path.exists(file.replace('_raw','_ima')):
-            print('IMA exists, skip', file)
-            continue
-        
-        print('Process', file)
-        
-        # Set CRCORR 
-        raw_im = pyfits.open(file, mode='update')
-        raw_im[0].header['CRCORR'] = 'OMIT'
-        raw_im.flush()
+    with Pool(ncpu) as pool:
+        pool.map(run_one, files)
 
-        # Remove FLT if it exists or calwf3 will die
-        if os.path.exists(file.replace('_raw','_flt')):
-            os.remove(file.replace('_raw','_flt'))
-        
-        # Run calwf3
-        wfc3tools.calwf3(file)
-        
-        # Split into individual FLTs
-        split_ima_flt(file=file.replace('_raw','_ima'), skip_first_read=skip_first_read)
+def run_one(file,skip_first_read=True):
+    """
+    Process a single RAW file
+    """
+
+    import os
+    import astropy.io.fits as pyfits
+    
+    import wfc3tools
+
+    if os.path.exists(file.replace('_raw','_ima')):
+        print('IMA exists, skip', file)
+        return
+    
+    print('Process', file)
+    
+    # Set CRCORR 
+    raw_im = pyfits.open(file, mode='update')
+    raw_im[0].header['CRCORR'] = 'OMIT'
+    raw_im.flush()
+
+    # Remove FLT if it exists or calwf3 will die
+    if os.path.exists(file.replace('_raw','_flt')):
+        os.remove(file.replace('_raw','_flt'))
+    
+    # Run calwf3
+    wfc3tools.calwf3(file)
+    
+    # Split into individual FLTs
+    split_ima_flt(file=file.replace('_raw','_ima'), skip_first_read=skip_first_read)
         
 def split_ima_flt(file='icxe15x0q_ima.fits', skip_first_read=True):
     """

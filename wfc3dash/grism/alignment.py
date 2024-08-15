@@ -9,7 +9,7 @@ import astropy.io.fits as pyfits
 import astropy.units as u
 
 # https://github.com/gbrammer/grizli
-from grizli import multifit, prep, utils, model
+from grizli import multifit, utils, model
 
 # https://github.com/gbrammer/golfir
 import golfir.utils
@@ -137,10 +137,10 @@ def align_dash_exposure(flt_file='iehn5vr8a_flt.fits', verbose=0):
     # Detect grism "objects"
     im = pyfits.open(flt_file)
     
-    utils.unset_dq_bits(im['DQ'].data, 512)
-
     sci = im['SCI'].data*1
-    dq = im['DQ'].data > 0
+    dq = im['DQ'].data
+    # dq = dq > 0
+    dq =  utils.mod_dq_bits(dq, okbits=512) > 0
     var = im['ERR'].data**2
     ivar = 1/var
     #ivar = ivar*0.+np.median(ivar[~dq])
@@ -168,10 +168,6 @@ def align_dash_exposure(flt_file='iehn5vr8a_flt.fits', verbose=0):
     
     cnum = golfir.utils.convolve_helper((sci-sky)*ivar, kernel)
     cden = golfir.utils.convolve_helper(ivar, kernel**2)
-    cden2 = golfir.utils.convolve_helper(ivar, kernel)
-
-    cnumx = golfir.utils.convolve_helper((sci-sky)*ivar, kx)
-    cdenx = golfir.utils.convolve_helper(ivar, kx**2)
 
     flt_sn = cnum*np.sqrt(cden)
     nb_labels = 0

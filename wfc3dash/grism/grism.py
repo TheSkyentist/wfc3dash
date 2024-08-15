@@ -221,46 +221,29 @@ def sync_products(assoc):
                               """)
 
 
-def align_visit(visit, flag_crs=True, driz_cr_kwargs={'driz_cr_snr_grow':3}, **kwargs):
+def align_visit(visit, kcat, init_guess=np.zeros(2), flag_crs=True, driz_cr_kwargs={'driz_cr_snr_grow':3}, **kwargs):
     """
     """
-    from skimage.transform import SimilarityTransform
     
     from tristars import match
     from .alignment import align_dash_exposure
 
-    global PATHS
-
-    os.chdir(PATHS['prep'])
-    ref_file = os.path.join(HOME_PATH, 
-                            'uvista_DR4_Ks_ADP.2019-02-05T17_00_54.618.fits')
-    eso_file = 'https://dataportal.eso.org/dataPortal/file/'
-    eso_file += 'ADP.2019-02-05T17:00:54.618'
-    if not os.path.exists(ref_file):
-        os.system(f'wget {eso_file} -O {ref_file}')
-
-    kcat = utils.read_catalog(ref_file)
-    kcat['H_AUTO'] = kcat['MAG_AUTO']
-    
     tabs = {}
     for file in visit['files']:
         print(f'============\n{file}\n============')
         if file in tabs:
             continue
         tabs[file] = align_dash_exposure(flt_file=file, verbose=0)
-        
-    plt.close("all")
-    
-    LOGFILE = visit['product']+'.log.txt'
+            
+        LOGFILE = visit['product']+'.log.txt'
 
-    # WCS alignment
-    msg = f'# file rmsx rmsy dx_arcsec dy_arcsec'
-    utils.log_comment(LOGFILE, msg, verbose=True, show_date=True)
+        # WCS alignment
+        msg = f'# file rmsx rmsy dx_arcsec dy_arcsec'
+        utils.log_comment(LOGFILE, msg, verbose=True, show_date=True)
     
-    for k in tabs:
-        C1 = np.array([tabs[k]['ra'], tabs[k]['dec']]).T
+        C1 = np.array([tabs[file]['ra'], tabs[file]['dec']]).T
 
-        idx, dr = tabs[k].match_to_catalog_sky(kcat)
+        idx, dr = tabs[file].match_to_catalog_sky(kcat)
 
         mlim = 20.2 if len(kcat) > 2000 else 21.5
 
@@ -282,13 +265,13 @@ def align_visit(visit, flag_crs=True, driz_cr_kwargs={'driz_cr_snr_grow':3}, **k
                                           auto_keep=False)
 
         tfo, dx, rms = match.get_transform(V1, V2, pair_ix,
-                                           transform=SimilarityTransform, 
+                                           transform=TranslationTransform, 
                                            use_ransac=True)
 
         ok = np.abs(dx.max(axis=1)) < 1
 
         tfo, dx, rms = match.get_transform(V1, V2, pair_ix[ok,:], 
-                                           transform=SimilarityTransform, 
+                                           transform=TranslationTransform, 
                                            use_ransac=True)
 
         fig = match.match_diagnostic_plot(V1, V2, pair_ix[ok,:], tf=tfo,
@@ -297,15 +280,15 @@ def align_visit(visit, flag_crs=True, driz_cr_kwargs={'driz_cr_snr_grow':3}, **k
         fig.axes[0].set_xlim(-180, 180)
         fig.axes[0].set_ylim(-180, 180)
         
-        fig.savefig(k.split('_flt')[0] + '.wcs.png')
+        fig.savefig(file.split('_flt')[0] + '.wcs.png')
         
         #print(k, rms, tfo.translation)
         tr = tfo.translation
         
-        msg = f'{k} {rms[0]:.2f} {rms[1]:.2f} {tr[0]:.2f} {tr[1]:.2f}'
+        msg = f'{file} {rms[0]:.2f} {rms[1]:.2f} {tr[0]:.2f} {tr[1]:.2f}'
         utils.log_comment(LOGFILE, msg, verbose=True, show_date=False)
         
-        im = pyfits.open(k, mode='update')
+        im = pyfits.open(file, mode='update')
         wcs = pywcs.WCS(im[1].header)
         cosd = np.array([np.cos(wcs.wcs.crval[1]/180*np.pi), 1])
         ddeg = tfo.translation/3600 * cosd
@@ -644,3 +627,30 @@ def run_one(clean=2, sync=True, align_kwargs={}):
                             align_kwargs=align_kwargs,
                             sync=sync)
                             
+class TranslationTransform:
+    """
+    Translation transform
+    """
+    def __init__(self):
+        self.translation = np.zeros(2)
+        self.rotation = 0 # Needed for plotting
+
+    def estimate(self, src, dst):
+        """
+        Estimate the translation vector from source to destination points.
+        """
+        translation_vector = np.mean(dst - src, axis=0)
+        self.translation = translation_vector
+        return True
+
+    def __call__(self, coords):
+        """
+        Apply the translation to the input coordinates.
+        """
+        return coords + self.translation
+
+    def residuals(self, src, dst):
+        """
+        Calculate the residuals between the transformed source points and the destination points.
+        """
+        return np.linalg.norm(self(src) - dst, axis=1)
